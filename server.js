@@ -34,9 +34,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/chats", verifyToken, chatRoutes);
 app.use("/api/story", verifyToken, storyRoutes);
-app.use("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "../public", "index.html"));
-});
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
