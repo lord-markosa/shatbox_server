@@ -7,14 +7,14 @@ import userRoutes from "./routes/userRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import storyRoutes from "./routes/storyRoutes.js";
 import verifyToken from "./middleware/auth.js";
+import path from "path";
 import { WebPubSubServiceClient } from "@azure/web-pubsub";
 import { fileURLToPath } from "url";
-import { dirname } from "path";
 
 const PORT = process.env.PORT || 5000;
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
