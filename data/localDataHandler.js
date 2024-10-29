@@ -1,5 +1,5 @@
-// backend/data/localDataHandler.js
-import fs, { read } from "fs";
+// OLD DEBUG CODE: [TODO] either remove or formalize debugging
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
