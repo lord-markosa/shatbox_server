@@ -1,58 +1,47 @@
-// backend/routes/chatRoutes.js
 import express from "express";
 import {
+    addChatToUser,
     createChat,
     getChatById,
-    getMessagesByChatId,
-    getNewPotentialChatPartners,
-    insertMessage,
-} from "../database/database.js";
-import { v4 as uuidv4 } from "uuid";
+    getRandomUser,
+    insertMessageIntoChat,
+} from "../models/dao.js";
 
 const router = express.Router();
 
-// Save a new chat
+// Create a new chat
 router.get("/new", async (req, res) => {
     const user = req.user;
     try {
-        const potentialPartners = await getNewPotentialChatPartners(user.id);
-        if (potentialPartners.length === 0) {
+        // search for a new chat partner
+        const potentialPartner = await getRandomUser(user.id, user.chatUserIds);
+        if (!potentialPartner) {
             return res.status(404).json({ message: "No users found" });
         }
-        const newPartner = potentialPartners[0];
-        const id = uuidv4();
-        await createChat(
-            id,
-            user.id,
-            user.username,
-            newPartner.id,
-            newPartner.username
-        );
+
+        // create a new chat
+        const newChat = await createChat({
+            user1: { id: user.id, username: user.username },
+            user2: {
+                id: potentialPartner.id,
+                username: potentialPartner.username,
+            },
+            messages: [],
+        });
+
+        // add chat to user's chat list
+        await Promise.all([
+            addChatToUser(user.id, potentialPartner, newChat.id, true),
+            addChatToUser(potentialPartner.id, user, newChat.id, false),
+        ]);
+
         res.status(201).json({
-            id,
-            username1: user.username,
-            username2: newPartner.username,
+            chatId: newChat.id,
+            partnerName: potentialPartner.username,
         });
     } catch (error) {
         console.error(`Error creating chat: ${error}`);
         res.status(500).json({ message: "Failed to fetch new chat" });
-    }
-});
-
-// Get a chat
-router.get("/:chatId", async (req, res) => {
-    const { chatId } = req.params;
-    const user = req.user;
-    try {
-        const chat = await getMessagesByChatId(chatId, user.id);
-        if (chat) {
-            res.status(200).json(chat);
-        } else {
-            res.status(404).json({ message: "Chat not found" });
-        }
-    } catch (error) {
-        console.error(`Error getting chat: ${error}`);
-        res.status(500).json({ message: "Failed to fetch chat" });
     }
 });
 
@@ -61,6 +50,7 @@ router.post("/:chatId/send", async (req, res) => {
     const { chatId } = req.params;
     const { content } = req.body;
     const senderId = req.user.id;
+
     // web pub sub service client
     const serviceClient = req.app.get("serviceClient");
     try {
@@ -68,37 +58,58 @@ router.post("/:chatId/send", async (req, res) => {
         if (!chat) {
             return res.status(404).json({ message: "Chat not found" });
         }
-        const { user1Id, user2Id } = chat;
-        if (senderId !== user1Id && senderId !== user2Id) {
+
+        const userId1 = chat.user1.id;
+        const userId2 = chat.user2.id;
+
+        if (userId1 !== senderId && userId2 !== senderId) {
             return res.status(403).json({ message: "Unauthorized" });
         }
-        const id = uuidv4();
-        const recipientId = senderId === user1Id ? user2Id : user1Id;
-        await insertMessage(id, chatId, senderId, recipientId, content);
-        res.status(201).json({
-            id,
+
+        const receiverId = userId1 === senderId ? userId2 : userId1;
+
+        const message = {
             timestamp: Date.now(),
             content,
-            sent: true,
-        });
-        await serviceClient.sendToUser(recipientId, {
-            chatId,
-            message: { id, content, sent: false },
-        });
+            sentBy1: senderId === chat.user1.id,
+        };
+
+        await insertMessageIntoChat(chatId, message);
+
+        res.status(201).json(message);
+
+        await serviceClient.sendToUser(receiverId, { chatId, message });
     } catch (error) {
         console.error(`Error sending message: ${error}`);
         res.status(500).json({ message: "Failed to send message" });
     }
 });
 
-// Delete a saved chat
-router.delete("/delete/:chatId", (req, res) => {
-    // const { chatId } = req.params;
-    // const user = req.user;
-    // user.chats = user.chats.filter((chat) => chat.id !== chatId);
-    // updateUser(user);
-    // deleteChat(chatId);
-    // res.status(204).send();
+// Get a chat
+router.get("/:chatId", async (req, res) => {
+    const { chatId } = req.params;
+    const user = req.user;
+    try {
+        const chat = await getChatById(chatId);
+        if (!chat) {
+            return res.status(404).json({ message: "Chat not found" });
+        }
+
+        return res.status(200).json({ messages: chat.messages });
+    } catch (error) {
+        console.error(`Error getting chat: ${error}`);
+        res.status(500).json({ message: "Failed to fetch chat" });
+    }
 });
+
+// [TODO] Delete a saved chat
+// router.delete("/delete/:chatId", (req, res) => {
+//     // const { chatId } = req.params;
+//     // const user = req.user;
+//     // user.chats = user.chats.filter((chat) => chat.id !== chatId);
+//     // updateUser(user);
+//     // deleteChat(chatId);
+//     // res.status(204).send();
+// });
 
 export default router;
