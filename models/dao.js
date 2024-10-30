@@ -77,9 +77,13 @@ export async function createUser(user) {
 }
 
 export async function getRandomUser(userId, chatUserIds) {
-    const query = `SELECT c.id, c.username FROM c WHERE c.id != "${userId}" AND c.id NOT IN (${chatUserIds
-        .map((item) => `"${item}"`)
-        .join(", ")}) OFFSET 0 LIMIT 5`;
+    let query = `SELECT c.id, c.username FROM c WHERE c.id != "${userId}" `;
+    if (chatUserIds?.length > 0) {
+        query += `AND c.id NOT IN (${chatUserIds
+            .map((item) => `"${item}"`)
+            .join(", ")}) `;
+    }
+    query += `OFFSET 0 LIMIT 5`;
     const { resources } = await userContainer.items.query({ query }).fetchAll();
     const length = resources.length;
     const randomIndex = Math.floor(Math.random() * length);
